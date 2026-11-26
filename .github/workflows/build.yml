@@ -1,0 +1,44 @@
+name: Build IPA
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Unzip project
+        run: unzip -o -q CopyPasteStar.zip
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Build IPA
+        working-directory: CopyPasteStar
+        run: |
+          set -o pipefail
+          xcodegen generate
+          xcodebuild -project CopyPasteStar.xcodeproj -target CopyPasteStar \
+            -configuration Release -sdk iphoneos SYMROOT="$PWD/build" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            build | tail -n 80
+          mkdir -p Payload
+          cp -R build/Release-iphoneos/CopyPasteStar.app Payload/
+          zip -qry ../CopyPasteStar.ipa Payload
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CopyPasteStar-ipa
+          path: CopyPasteStar.ipa
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: CopyPasteStar ${{ github.run_number }}
+          files: CopyPasteStar.ipa
